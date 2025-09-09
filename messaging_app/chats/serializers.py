@@ -1,5 +1,4 @@
 from rest_framework import serializers
-from rest_framework.fields import CharField
 from .models import User, Conversation, Message
 
 
@@ -8,7 +7,7 @@ class UserSerializer(serializers.ModelSerializer):
     Serializer for User model
     """
     # Explicit CharField usage
-    full_name = CharField(source='get_full_name', read_only=True)
+    full_name = serializers.CharField(source='get_full_name', read_only=True)
     
     class Meta:
         model = User

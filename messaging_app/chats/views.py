@@ -93,6 +93,20 @@ class MessageViewSet(viewsets.ModelViewSet):
         """
         Return messages from conversations where the current user is a participant
         """
+        # Handle nested router parameter
+        conversation_pk = self.kwargs.get('conversation_pk')
+        if conversation_pk:
+            # Filter messages for specific conversation
+            try:
+                conversation = Conversation.objects.get(
+                    conversation_id=conversation_pk,
+                    participants_id=self.request.user
+                )
+                return Message.objects.filter(conversation=conversation)
+            except Conversation.DoesNotExist:
+                return Message.objects.none()
+        
+        # Return all messages for user's conversations
         user_conversations = Conversation.objects.filter(participants_id=self.request.user)
         return Message.objects.filter(conversation__in=user_conversations)
     
@@ -104,7 +118,7 @@ class MessageViewSet(viewsets.ModelViewSet):
             return MessageCreateSerializer
         return MessageSerializer
     
-    def list(self, request):
+    def list(self, request, **kwargs):
         """
         List all messages for the authenticated user
         """
