@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-s=he2s_2%0pkr%qmrb3qif=rm@v9(wgy9eajvro3o_ka21nfi$
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver']
 
 
 # Application definition
@@ -122,6 +122,9 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Custom User Model
+AUTH_USER_MODEL = 'chats.User'
 
 # Django REST Framework configuration
 REST_FRAMEWORK = {
