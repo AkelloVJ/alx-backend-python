@@ -14,7 +14,7 @@ LOG_FILE = BASE_DIR / 'requests.log'
 # Configure logging for requests
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format='%(message)s',
     handlers=[
         logging.FileHandler(LOG_FILE),
         logging.StreamHandler()
@@ -33,9 +33,6 @@ class RequestLoggingMiddleware(MiddlewareMixin):
         super().__init__(get_response)
     
     def __call__(self, request):
-        # Debug: Print request path
-        print(f"RequestLoggingMiddleware: Processing request to {request.path}")
-        
         # Log the request before processing
         user = getattr(request, 'user', None)
         if user and hasattr(user, 'username'):
@@ -45,10 +42,9 @@ class RequestLoggingMiddleware(MiddlewareMixin):
         else:
             user_info = "Anonymous"
         
-        # Log the request information
+        # Log the request information in the exact format required
         log_message = f"{datetime.now()} - User: {user_info} - Path: {request.path}"
         logger.info(log_message)
-        print(f"RequestLoggingMiddleware: Logged: {log_message}")
         
         # Process the request
         response = self.get_response(request)
@@ -67,31 +63,22 @@ class RestrictAccessByTimeMiddleware(MiddlewareMixin):
         super().__init__(get_response)
     
     def __call__(self, request):
-        # Debug: Print request path
-        print(f"RestrictAccessByTimeMiddleware: Processing request to {request.path}")
-        
         # Check if the request is for chat/messaging endpoints
         if request.path.startswith('/api/') and any(endpoint in request.path for endpoint in ['messages', 'conversations', 'chats']):
             current_time = datetime.now().time()
-            print(f"RestrictAccessByTimeMiddleware: Current time: {current_time}")
             
             # Define allowed time window (6PM to 9PM)
             start_time = dt_time(18, 0)  # 6PM
             end_time = dt_time(21, 0)    # 9PM
             
-            print(f"RestrictAccessByTimeMiddleware: Allowed window: {start_time} - {end_time}")
-            
             # Check if current time is outside the allowed window
             if not (start_time <= current_time <= end_time):
-                print("RestrictAccessByTimeMiddleware: Access denied - outside allowed hours")
                 return JsonResponse({
                     'error': 'Access denied',
                     'message': 'Messaging service is only available between 6PM and 9PM',
                     'current_time': current_time.strftime('%H:%M:%S'),
                     'allowed_hours': '18:00 - 21:00'
                 }, status=403)
-            else:
-                print("RestrictAccessByTimeMiddleware: Access allowed - within allowed hours")
         
         # Process the request if within allowed time
         response = self.get_response(request)
@@ -184,19 +171,12 @@ class RolePermissionMiddleware(MiddlewareMixin):
         self.allowed_roles = ['admin', 'moderator']
     
     def __call__(self, request):
-        # Debug: Print request path
-        print(f"RolePermissionMiddleware: Processing request to {request.path}")
-        
         # Check if the request is for protected endpoints
         if any(request.path.startswith(endpoint) for endpoint in self.protected_endpoints):
-            print(f"RolePermissionMiddleware: Protected endpoint detected: {request.path}")
             user = getattr(request, 'user', None)
-            print(f"RolePermissionMiddleware: User: {user}")
-            print(f"RolePermissionMiddleware: User authenticated: {user.is_authenticated if user else 'No user'}")
             
             # Check if user is authenticated
             if not user or not user.is_authenticated:
-                print("RolePermissionMiddleware: User not authenticated")
                 return JsonResponse({
                     'error': 'Authentication required',
                     'message': 'You must be logged in to access this resource'
@@ -204,19 +184,14 @@ class RolePermissionMiddleware(MiddlewareMixin):
             
             # Check if user has the required role
             user_role = getattr(user, 'role', None)
-            print(f"RolePermissionMiddleware: User role: {user_role}")
-            print(f"RolePermissionMiddleware: Allowed roles: {self.allowed_roles}")
             
             if user_role not in self.allowed_roles:
-                print("RolePermissionMiddleware: Access denied - insufficient role")
                 return JsonResponse({
                     'error': 'Access denied',
                     'message': 'You do not have permission to access this resource',
                     'required_roles': self.allowed_roles,
                     'your_role': user_role
                 }, status=403)
-            else:
-                print("RolePermissionMiddleware: Access granted - sufficient role")
         
         # Process the request
         response = self.get_response(request)
