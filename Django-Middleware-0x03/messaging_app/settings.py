@@ -53,7 +53,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'chats.middleware.RestrictAccessByTimeMiddleware',  # Time-based access restriction (before role check)
-    'chats.middleware.RolePermissionMiddleware',  # Check user roles
+    'chats.middleware.RolepermissionMiddleware',  # Check user roles
     'chats.middleware.OffensiveLanguageMiddleware',  # Rate limiting
     'chats.middleware.RequestDataFilteringMiddleware',  # Data filtering
     'django.contrib.messages.middleware.MessageMiddleware',

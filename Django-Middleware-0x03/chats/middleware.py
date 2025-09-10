@@ -151,7 +151,7 @@ class OffensiveLanguageMiddleware(MiddlewareMixin):
         return self.time_window
 
 
-class RolePermissionMiddleware(MiddlewareMixin):
+class RolepermissionMiddleware(MiddlewareMixin):
     """
     Middleware that checks the user's role before allowing access to specific actions.
     Only admin or moderator users can access certain endpoints.
