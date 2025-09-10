@@ -6,6 +6,7 @@ class IsParticipantOfConversation(permissions.BasePermission):
     Custom permission class that:
     - Allows only authenticated users to access the API
     - Allows only participants in a conversation to send, view, update and delete messages
+    - Handles GET, POST, PUT, PATCH, DELETE methods
     """
     
     def has_permission(self, request, view):
@@ -17,6 +18,7 @@ class IsParticipantOfConversation(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         """
         Check if the user is a participant in the conversation
+        Handles GET, POST, PUT, PATCH, DELETE methods
         """
         # For conversation objects, check if user is a participant
         if hasattr(obj, 'participants_id'):
@@ -27,6 +29,41 @@ class IsParticipantOfConversation(permissions.BasePermission):
             return obj.conversation.participants_id == request.user
         
         # For other objects, deny access by default
+        return False
+
+
+class IsParticipantForWriteOperations(permissions.BasePermission):
+    """
+    Permission class specifically for write operations (PUT, PATCH, DELETE)
+    Only participants in a conversation can perform these operations
+    """
+    
+    def has_permission(self, request, view):
+        """
+        Check if the user is authenticated
+        """
+        return request.user.is_authenticated
+    
+    def has_object_permission(self, request, view, obj):
+        """
+        Check if the user is a participant in the conversation for write operations
+        Handles PUT, PATCH, DELETE methods specifically
+        """
+        # Only check for write operations
+        if request.method in ['PUT', 'PATCH', 'DELETE']:
+            # For conversation objects, check if user is a participant
+            if hasattr(obj, 'participants_id'):
+                return obj.participants_id == request.user
+            
+            # For message objects, check if user is a participant in the conversation
+            if hasattr(obj, 'conversation'):
+                return obj.conversation.participants_id == request.user
+        
+        # For read operations, allow if authenticated
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        
+        # For other operations, deny access by default
         return False
 
 
