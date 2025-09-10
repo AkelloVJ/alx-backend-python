@@ -1,17 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
-
-
-class UnreadMessagesManager(models.Manager):
-    """
-    Custom manager to filter unread messages for a specific user.
-    """
-    def for_user(self, user):
-        return self.filter(receiver=user, read=False)
-    
-    def unread_count(self, user):
-        return self.for_user(user).count()
+from .managers import UnreadMessagesManager
 
 
 class Message(models.Model):

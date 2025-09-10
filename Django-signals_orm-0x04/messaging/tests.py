@@ -50,7 +50,7 @@ class MessageModelTest(TestCase):
         unread_count = Message.unread.unread_count(self.user2)
         self.assertEqual(unread_count, 1)
         
-        unread_messages = Message.unread.for_user(self.user2)
+        unread_messages = Message.unread.unread_for_user(self.user2)
         self.assertEqual(unread_messages.count(), 1)
 
 
@@ -196,7 +196,7 @@ class MessageAPITest(APITestCase):
         self.client.force_login(self.user1)
         response = self.client.get(f'/api/messages/{parent.id}/thread/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 2)
+        self.assertEqual(len(response.data), 3)  # Parent + 2 replies
     
     def test_delete_user_account(self):
         # Create some data
