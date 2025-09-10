@@ -46,10 +46,16 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'chats.middleware.RequestLoggingMiddleware',  # Log all requests
+    'chats.middleware.SecurityHeadersMiddleware',  # Add security headers
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'chats.middleware.RestrictAccessByTimeMiddleware',  # Time-based access restriction (before role check)
+    'chats.middleware.RolePermissionMiddleware',  # Check user roles
+    'chats.middleware.OffensiveLanguageMiddleware',  # Rate limiting
+    'chats.middleware.RequestDataFilteringMiddleware',  # Data filtering
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -137,7 +143,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.BasicAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'chats.permissions.IsParticipantOfConversation',
+        'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
