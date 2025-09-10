@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
 from .models import User, Conversation, Message
 from .serializers import (
     UserSerializer, 
@@ -12,13 +13,28 @@ from .serializers import (
     MessageCreateSerializer,
     ConversationCreateSerializer
 )
+from .permissions import (
+    IsParticipantOfConversation,
+    IsConversationParticipant,
+    IsMessageSenderOrConversationParticipant,
+    IsOwnerOrAdmin,
+    CanAccessOwnData
+)
+from .pagination import MessagePagination, ConversationPagination, UserPagination
+from .filters import MessageFilter, ConversationFilter, UserFilter
 
 
 class ConversationViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing conversations
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsParticipantOfConversation]
+    pagination_class = ConversationPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = ConversationFilter
+    search_fields = ['participants_id__first_name', 'participants_id__last_name', 'participants_id__email']
+    ordering_fields = ['created_at', 'participants_id__first_name']
+    ordering = ['-created_at']
     
     def get_queryset(self):
         """
@@ -87,7 +103,13 @@ class MessageViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing messages
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsParticipantOfConversation]
+    pagination_class = MessagePagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = MessageFilter
+    search_fields = ['message_body', 'sender__first_name', 'sender__last_name', 'sender__email']
+    ordering_fields = ['sent_at', 'sender__first_name', 'message_body']
+    ordering = ['-sent_at']
     
     def get_queryset(self):
         """
@@ -207,6 +229,59 @@ class MessageViewSet(viewsets.ModelViewSet):
         messages = self.get_queryset().order_by('-sent_at')[:limit]
         serializer = MessageSerializer(messages, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def by_sender(self, request):
+        """
+        Get messages filtered by sender
+        """
+        sender_id = request.query_params.get('sender_id')
+        if not sender_id:
+            return Response(
+                {'error': 'sender_id parameter is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        messages = self.get_queryset().filter(sender__user_id=sender_id)
+        serializer = MessageSerializer(messages, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def by_date_range(self, request):
+        """
+        Get messages filtered by date range
+        """
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        
+        if not start_date or not end_date:
+            return Response(
+                {'error': 'start_date and end_date parameters are required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        messages = self.get_queryset().filter(
+            sent_at__date__gte=start_date,
+            sent_at__date__lte=end_date
+        )
+        serializer = MessageSerializer(messages, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def search(self, request):
+        """
+        Search messages by content
+        """
+        query = request.query_params.get('q')
+        if not query:
+            return Response(
+                {'error': 'q parameter is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        messages = self.get_queryset().filter(message_body__icontains=query)
+        serializer = MessageSerializer(messages, many=True)
+        return Response(serializer.data)
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -215,7 +290,13 @@ class UserViewSet(viewsets.ModelViewSet):
     """
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    pagination_class = UserPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = UserFilter
+    search_fields = ['first_name', 'last_name', 'email']
+    ordering_fields = ['first_name', 'last_name', 'email', 'created_at', 'role']
+    ordering = ['first_name']
     
     def get_queryset(self):
         """
