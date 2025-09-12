@@ -57,3 +57,4 @@ networks:
   messaging_network:
     driver: bridge
 
+

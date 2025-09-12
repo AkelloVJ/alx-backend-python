@@ -58,3 +58,4 @@ done
 echo "=== Rolling update completed successfully ==="
 echo "Final pod status:"
 kubectl get pods -l app=django-messaging-app,version=blue -o wide
+

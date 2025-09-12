@@ -62,3 +62,4 @@ kubectl get ingress
 echo "=== All deployments completed successfully! ==="
 echo "You can now access your application through the ingress or port-forward:"
 echo "kubectl port-forward service/django-messaging-service 8000:8000"
+

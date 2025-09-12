@@ -143,3 +143,4 @@ kubectl top nodes
 - Ingress is configured for both localhost and django-messaging.local
 - Blue-green deployment allows for zero-downtime updates
 - Rolling updates ensure minimal disruption during version changes
+

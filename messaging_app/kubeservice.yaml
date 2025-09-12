@@ -50,3 +50,4 @@ spec:
   selector:
     app: django-messaging-app
     version: green
+

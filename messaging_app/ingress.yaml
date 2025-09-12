@@ -29,3 +29,4 @@ spec:
             name: django-messaging-service
             port:
               number: 8000
+

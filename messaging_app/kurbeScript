@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+INFO() { echo "[INFO] $*"; }
+WARN() { echo "[WARN] $*" >&2; }
+ERROR() { echo "[ERROR] $*" >&2; }
+
+require_cmd() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        return 1
+    fi
+}
+
+install_minikube_linux() {
+    INFO "Installing minikube (Linux)..."
+    tmp_file="/tmp/minikube-linux-amd64"
+    curl -fsSL -o "$tmp_file" "https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64"
+    chmod +x "$tmp_file"
+    sudo mv "$tmp_file" /usr/local/bin/minikube
+    INFO "minikube installed to /usr/local/bin/minikube"
+}
+
+install_kubectl_linux() {
+    INFO "Installing kubectl (Linux)..."
+    tmp_file="/tmp/kubectl"
+    curl -fsSL -o "$tmp_file" "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    chmod +x "$tmp_file"
+    sudo mv "$tmp_file" /usr/local/bin/kubectl
+    INFO "kubectl installed to /usr/local/bin/kubectl"
+}
+
+ensure_minikube() {
+    if require_cmd minikube; then
+        INFO "minikube already installed: $(minikube version | head -n1)"
+        return 0
+    fi
+
+    case "${OSTYPE:-linux}" in
+        linux*) install_minikube_linux ;;
+        *)
+            ERROR "Unsupported OS for auto-install: ${OSTYPE:-unknown}. Please install minikube manually: https://minikube.sigs.k8s.io/docs/start/"
+            exit 1
+            ;;
+    esac
+}
+
+ensure_kubectl() {
+    if require_cmd kubectl; then
+        INFO "kubectl already installed: $(kubectl version --client --output=yaml | head -n1 || true)"
+        return 0
+    fi
+
+    case "${OSTYPE:-linux}" in
+        linux*) install_kubectl_linux ;;
+        *)
+            WARN "Unsupported OS for kubectl auto-install: ${OSTYPE:-unknown}. Falling back to 'minikube kubectl --' for commands."
+            ;;
+    esac
+}
+
+kubectl_cmd() {
+    if require_cmd kubectl; then
+        kubectl "$@"
+    else
+        # Fallback to minikube-provided kubectl
+        minikube kubectl -- "$@"
+    fi
+}
+
+start_cluster() {
+    if minikube status >/dev/null 2>&1; then
+        if minikube status | grep -qi "host: Running"; then
+            INFO "Minikube cluster already running."
+            return 0
+        fi
+    fi
+
+    INFO "Starting minikube cluster..."
+    minikube start --wait=all
+    INFO "Minikube cluster started."
+}
+
+verify_cluster() {
+    INFO "Verifying cluster with 'kubectl cluster-info'..."
+    kubectl_cmd cluster-info
+}
+
+list_pods() {
+    INFO "Retrieving available pods across all namespaces..."
+    kubectl_cmd get pods -A
+}
+
+main() {
+    INFO "Ensuring minikube is installed..."
+    ensure_minikube
+
+    INFO "Ensuring kubectl is available (or using minikube fallback)..."
+    ensure_kubectl || true
+
+    start_cluster
+    verify_cluster
+    list_pods
+}
+
+main "$@"
+
+

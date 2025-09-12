@@ -19,23 +19,11 @@ spec:
         image: django-messaging-app:latest
         ports:
         - containerPort: 8000
-        env:
-        - name: DEBUG
-          value: "False"
-        - name: ALLOWED_HOSTS
-          value: "*"
-        - name: MYSQL_HOST
-          value: "mysql-service"
-        - name: MYSQL_DATABASE
-          value: "messaging_db"
-        - name: MYSQL_USER
-          value: "messaging_user"
-        - name: MYSQL_PASSWORD
-          value: "messaging_password"
-        - name: MYSQL_PORT
-          value: "3306"
-        - name: SECRET_KEY
-          value: "django-insecure-s=he2s_2%0pkr%qmrb3qif=rm@v9(wgy9eajvro3o_ka21nfi$"
+        envFrom:
+        - configMapRef:
+            name: django-env
+        - secretRef:
+            name: django-secrets
         resources:
           requests:
             memory: "256Mi"
@@ -56,3 +44,20 @@ spec:
           initialDelaySeconds: 5
           periodSeconds: 5
       restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-messaging-service
+  labels:
+    app: django-messaging-app
+spec:
+  type: ClusterIP
+  selector:
+    app: django-messaging-app
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+

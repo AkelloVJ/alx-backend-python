@@ -13,3 +13,4 @@ spec:
     name: http
   selector:
     app: django-messaging-app
+
