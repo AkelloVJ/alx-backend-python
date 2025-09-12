@@ -1,0 +1,56 @@
+#!/bin/bash
+
+# kubctl-0x01: Scale Django app and perform load testing
+# This script scales the Django app to 3 replicas and performs load testing
+
+echo "=== Scaling Django Messaging App to 3 replicas ==="
+kubectl scale deployment django-messaging-app --replicas=3
+
+echo "=== Waiting for pods to be ready ==="
+kubectl rollout status deployment/django-messaging-app
+
+echo "=== Verifying multiple pods are running ==="
+kubectl get pods -l app=django-messaging-app
+
+echo "=== Getting service information ==="
+kubectl get service django-messaging-service
+
+echo "=== Getting service endpoint ==="
+SERVICE_IP=$(kubectl get service django-messaging-service -o jsonpath='{.spec.clusterIP}')
+echo "Service IP: $SERVICE_IP"
+
+echo "=== Performing load testing with wrk ==="
+# Install wrk if not available
+if ! command -v wrk &> /dev/null; then
+    echo "Installing wrk for load testing..."
+    # For Ubuntu/Debian
+    if command -v apt-get &> /dev/null; then
+        sudo apt-get update && sudo apt-get install -y wrk
+    # For CentOS/RHEL
+    elif command -v yum &> /dev/null; then
+        sudo yum install -y wrk
+    else
+        echo "Please install wrk manually for load testing"
+        exit 1
+    fi
+fi
+
+# Perform load testing
+echo "Running load test for 30 seconds with 10 threads and 100 connections..."
+wrk -t10 -c100 -d30s --timeout 10s http://$SERVICE_IP:8000/api/ || echo "Load test completed (may show errors if service not fully ready)"
+
+echo "=== Monitoring Resource Usage ==="
+echo "Pod resource usage:"
+kubectl top pods -l app=django-messaging-app
+
+echo "=== Node resource usage:"
+kubectl top nodes
+
+echo "=== Checking pod logs for any errors ==="
+PODS=$(kubectl get pods -l app=django-messaging-app -o jsonpath='{.items[*].metadata.name}')
+for pod in $PODS; do
+    echo "--- Logs for pod: $pod ---"
+    kubectl logs $pod --tail=20
+done
+
+echo "=== Scaling and load testing completed ==="

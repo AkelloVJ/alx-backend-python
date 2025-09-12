@@ -1,0 +1,26 @@
+# Commands to apply Ingress configuration
+
+# 1. Install Nginx Ingress Controller
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.2/deploy/static/provider/cloud/deploy.yaml
+
+# 2. Wait for ingress controller to be ready
+kubectl wait --namespace ingress-nginx \
+  --for=condition=ready pod \
+  --selector=app.kubernetes.io/component=controller \
+  --timeout=120s
+
+# 3. Apply the Ingress resource
+kubectl apply -f ingress.yaml
+
+# 4. Verify ingress is created
+kubectl get ingress
+
+# 5. Check ingress controller logs
+kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
+
+# 6. Test the ingress (replace with actual external IP)
+kubectl get ingress django-messaging-ingress
+curl -H "Host: django-messaging.local" http://<EXTERNAL-IP>/api/
+
+# 7. Port forward for local testing
+kubectl port-forward -n ingress-nginx service/ingress-nginx-controller 8080:80

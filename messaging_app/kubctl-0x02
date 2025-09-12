@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# kubctl-0x02: Blue-Green Deployment Script
+# This script deploys both blue and green versions and checks for errors
+
+echo "=== Starting Blue-Green Deployment ==="
+
+echo "=== Deploying Blue Version ==="
+kubectl apply -f blue_deployment.yaml
+
+echo "=== Deploying Green Version ==="
+kubectl apply -f green_deployment.yaml
+
+echo "=== Applying Service Configuration ==="
+kubectl apply -f kubeservice.yaml
+
+echo "=== Waiting for deployments to be ready ==="
+echo "Waiting for blue deployment..."
+kubectl rollout status deployment/django-messaging-app-blue
+
+echo "Waiting for green deployment..."
+kubectl rollout status deployment/django-messaging-app-green
+
+echo "=== Checking pod status ==="
+kubectl get pods -l app=django-messaging-app
+
+echo "=== Checking services ==="
+kubectl get services -l app=django-messaging-app
+
+echo "=== Checking logs for errors in blue version ==="
+BLUE_PODS=$(kubectl get pods -l app=django-messaging-app,version=blue -o jsonpath='{.items[*].metadata.name}')
+for pod in $BLUE_PODS; do
+    echo "--- Blue Pod: $pod ---"
+    kubectl logs $pod --tail=50
+    echo ""
+done
+
+echo "=== Checking logs for errors in green version ==="
+GREEN_PODS=$(kubectl get pods -l app=django-messaging-app,version=green -o jsonpath='{.items[*].metadata.name}')
+for pod in $GREEN_PODS; do
+    echo "--- Green Pod: $pod ---"
+    kubectl logs $pod --tail=50
+    echo ""
+done
+
+echo "=== Testing both versions ==="
+BLUE_SERVICE_IP=$(kubectl get service django-messaging-service-blue -o jsonpath='{.spec.clusterIP}')
+GREEN_SERVICE_IP=$(kubectl get service django-messaging-service-green -o jsonpath='{.spec.clusterIP}')
+
+echo "Testing blue version at $BLUE_SERVICE_IP:8000"
+curl -s -o /dev/null -w "Blue version response code: %{http_code}\n" http://$BLUE_SERVICE_IP:8000/api/ || echo "Blue version test failed"
+
+echo "Testing green version at $GREEN_SERVICE_IP:8000"
+curl -s -o /dev/null -w "Green version response code: %{http_code}\n" http://$GREEN_SERVICE_IP:8000/api/ || echo "Green version test failed"
+
+echo "=== Switching traffic to green version ==="
+# Update the main service to point to green version
+kubectl patch service django-messaging-service -p '{"spec":{"selector":{"version":"green"}}}'
+
+echo "=== Verifying traffic switch ==="
+MAIN_SERVICE_IP=$(kubectl get service django-messaging-service -o jsonpath='{.spec.clusterIP}')
+echo "Testing main service (should now point to green) at $MAIN_SERVICE_IP:8000"
+curl -s -o /dev/null -w "Main service response code: %{http_code}\n" http://$MAIN_SERVICE_IP:8000/api/ || echo "Main service test failed"
+
+echo "=== Blue-Green deployment completed ==="
+echo "Current service selector:"
+kubectl get service django-messaging-service -o jsonpath='{.spec.selector}'
+echo ""

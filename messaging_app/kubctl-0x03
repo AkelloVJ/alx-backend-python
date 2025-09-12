@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# kubctl-0x03: Rolling Update Script
+# This script applies rolling updates and monitors the process
+
+echo "=== Starting Rolling Update to Version 2.0 ==="
+
+# Get the service IP for testing
+SERVICE_IP=$(kubectl get service django-messaging-service -o jsonpath='{.spec.clusterIP}')
+echo "Service IP: $SERVICE_IP"
+
+# Function to test the app
+test_app() {
+    local test_name="$1"
+    echo "--- $test_name ---"
+    curl -s -o /dev/null -w "Response code: %{http_code}, Time: %{time_total}s\n" http://$SERVICE_IP:8000/api/ || echo "Test failed"
+}
+
+echo "=== Testing app before update ==="
+test_app "Pre-update test"
+
+echo "=== Applying updated deployment file ==="
+kubectl apply -f blue_deployment.yaml
+
+echo "=== Starting rolling update monitoring ==="
+# Start monitoring in background
+(
+    while true; do
+        test_app "Continuous test during update"
+        sleep 2
+    done
+) &
+MONITOR_PID=$!
+
+echo "=== Monitoring rollout status ==="
+kubectl rollout status deployment/django-messaging-app-blue --timeout=300s
+
+# Stop the monitoring process
+kill $MONITOR_PID 2>/dev/null || true
+
+echo "=== Verifying Rolling Update is Complete ==="
+echo "Current pods:"
+kubectl get pods -l app=django-messaging-app,version=blue
+
+echo "=== Checking deployment status ==="
+kubectl get deployment django-messaging-app-blue
+
+echo "=== Testing app after update ==="
+test_app "Post-update test"
+
+echo "=== Checking pod logs for any errors ==="
+PODS=$(kubectl get pods -l app=django-messaging-app,version=blue -o jsonpath='{.items[*].metadata.name}')
+for pod in $PODS; do
+    echo "--- Logs for pod: $pod ---"
+    kubectl logs $pod --tail=20
+done
+
+echo "=== Rolling update completed successfully ==="
+echo "Final pod status:"
+kubectl get pods -l app=django-messaging-app,version=blue -o wide
