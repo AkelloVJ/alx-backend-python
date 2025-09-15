@@ -1,0 +1,184 @@
+pipeline {
+    agent any
+    
+    environment {
+        PYTHON_VERSION = '3.12'
+        DJANGO_SETTINGS_MODULE = 'messaging_app.settings'
+        SECRET_KEY = 'django-insecure-test-key-for-jenkins'
+        DEBUG = 'True'
+        ALLOWED_HOSTS = 'localhost,127.0.0.1,testserver'
+        MYSQL_DATABASE = 'test_messaging_db'
+        MYSQL_USER = 'test_user'
+        MYSQL_PASSWORD = 'test_password'
+        MYSQL_HOST = 'localhost'
+        MYSQL_PORT = '3306'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                echo 'Code checked out from GitHub repository'
+            }
+        }
+        
+        stage('Setup Python Environment') {
+            steps {
+                sh '''
+                    python${PYTHON_VERSION} --version
+                    python${PYTHON_VERSION} -m venv venv
+                    source venv/bin/activate
+                    pip install --upgrade pip
+                '''
+            }
+        }
+        
+        stage('Install Dependencies') {
+            steps {
+                sh '''
+                    source venv/bin/activate
+                    pip install -r requirements.txt
+                    pip install -r requirements-test.txt
+                '''
+            }
+        }
+        
+        stage('Database Setup') {
+            steps {
+                sh '''
+                    source venv/bin/activate
+                    cd messaging_app
+                    python manage.py migrate --run-syncdb
+                    python manage.py collectstatic --noinput
+                '''
+            }
+        }
+        
+        stage('Run Tests') {
+            steps {
+                sh '''
+                    source venv/bin/activate
+                    cd messaging_app
+                    
+                    # Run Django tests
+                    python manage.py test --verbosity=2
+                    
+                    # Run pytest tests
+                    pytest test_*.py -v --tb=short --html=test_report.html --self-contained-html
+                '''
+            }
+            post {
+                always {
+                    publishHTML([
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'messaging_app',
+                        reportFiles: 'test_report.html',
+                        reportName: 'Test Report'
+                    ])
+                }
+            }
+        }
+        
+        stage('Run API Tests') {
+            steps {
+                sh '''
+                    source venv/bin/activate
+                    cd messaging_app
+                    
+                    # Start Django server in background
+                    python manage.py runserver 127.0.0.1:8000 &
+                    SERVER_PID=$!
+                    
+                    # Wait for server to start
+                    sleep 10
+                    
+                    # Run API tests
+                    python test_simple.py || true
+                    python test_auth.py || true
+                    python test_api_comprehensive.py || true
+                    
+                    # Stop the server
+                    kill $SERVER_PID || true
+                '''
+            }
+        }
+        
+        stage('Generate Test Report') {
+            steps {
+                sh '''
+                    source venv/bin/activate
+                    cd messaging_app
+                    
+                    # Create a comprehensive test report
+                    echo "# Test Execution Report" > test_summary.md
+                    echo "Generated on: $(date)" >> test_summary.md
+                    echo "" >> test_summary.md
+                    echo "## Test Results" >> test_summary.md
+                    echo "" >> test_summary.md
+                    
+                    # Run tests and capture output
+                    python manage.py test --verbosity=2 > django_tests.log 2>&1 || true
+                    pytest test_*.py -v > pytest_tests.log 2>&1 || true
+                    
+                    echo "### Django Tests" >> test_summary.md
+                    echo "\`\`\`" >> test_summary.md
+                    cat django_tests.log >> test_summary.md
+                    echo "\`\`\`" >> test_summary.md
+                    echo "" >> test_summary.md
+                    
+                    echo "### Pytest Tests" >> test_summary.md
+                    echo "\`\`\`" >> test_summary.md
+                    cat pytest_tests.log >> test_summary.md
+                    echo "\`\`\`" >> test_summary.md
+                '''
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                script {
+                    def image = sh(script: "git config --get remote.origin.url | sed -E 's#.*/(.*)\\.git#\\1#'", returnStdout: true).trim()
+                    def owner = sh(script: "git config --get remote.origin.url | sed -E 's#.*[:/]([^/]+)/[^/]+\\.git#\\1#'", returnStdout: true).trim()
+                    def imageName = "${owner}/${image}"
+                    def tag = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    env.IMAGE_NAME = imageName
+                    env.IMAGE_TAG = tag
+                    sh """
+                        docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -f Dockerfile .
+                    """
+                }
+            }
+        }
+
+        stage('Docker Login & Push') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_TOKEN')]) {
+                    sh '''
+                        echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            archiveArtifacts artifacts: 'messaging_app/test_report.html', fingerprint: true
+            archiveArtifacts artifacts: 'messaging_app/test_summary.md', fingerprint: true
+            archiveArtifacts artifacts: 'messaging_app/django_tests.log', fingerprint: true
+            archiveArtifacts artifacts: 'messaging_app/pytest_tests.log', fingerprint: true
+        }
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+        unstable {
+            echo 'Pipeline is unstable!'
+        }
+    }
+}

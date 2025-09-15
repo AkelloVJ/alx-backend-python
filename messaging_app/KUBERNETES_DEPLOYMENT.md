@@ -144,3 +144,5 @@ kubectl top nodes
 - Blue-green deployment allows for zero-downtime updates
 - Rolling updates ensure minimal disruption during version changes
 
+
+

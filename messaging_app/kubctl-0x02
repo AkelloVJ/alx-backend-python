@@ -67,3 +67,5 @@ echo "Current service selector:"
 kubectl get service django-messaging-service -o jsonpath='{.spec.selector}'
 echo ""
 
+
+
